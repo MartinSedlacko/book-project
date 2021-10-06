@@ -29,6 +29,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import javax.mail.MessagingException;
 import java.util.List;
 
 @RestController
@@ -71,20 +72,19 @@ public class UserController {
     public void register(@RequestBody UserToRegisterDto user) {
         try {
             userService.register(user);
-            emailService.sendSimpleMessage(user.getUsername(),
-                    EmailConstant.ACCOUNT_CREATED,
-                    EmailTemplate.getAccountCreateEmailTemplate(
-                            emailService.getUsernameFromEmail(user.getUsername()),
-                            EmailConstant.EMAIL_KARANKUMAR
-                    ));
-        } catch (UserAlreadyRegisteredException e) {
+            emailService.sendMessageUsingThymeleafTemplate(
+                    user.getUsername(),
+                    EmailConstant.ACCOUNT_CREATED_SUBJECT,
+                    EmailTemplate.getAccountCreatedEmailTemplate(emailService.getUsernameFromEmail(user.getUsername()))
+            );
+        } catch (UserAlreadyRegisteredException | MessagingException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email taken");
         }
     }
 
     @DeleteMapping()
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteCurrentUser(@RequestBody UserToDeleteDto user) {
+    public void deleteCurrentUser(@RequestBody UserToDeleteDto user) throws MessagingException {
         String password = user.getPassword();
         if (passwordEncoder.matches(password, userService.getCurrentUser().getPassword())) {
             User userEntity = userService.getCurrentUser();
@@ -92,11 +92,11 @@ public class UserController {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
             }
             userService.deleteUserById(userEntity.getId());
-            emailService.sendSimpleMessage(userEntity.getEmail(), EmailConstant.ACCOUNT_DELETED,
-                    EmailTemplate.getAccountDeleteEmailTemplate(
-                            emailService.getUsernameFromEmail(userEntity.getEmail()),
-                            EmailConstant.EMAIL_KARANKUMAR
-                    ));
+            emailService.sendMessageUsingThymeleafTemplate(
+                    userEntity.getEmail(),
+                    EmailConstant.ACCOUNT_DELETED_SUBJECT,
+                    EmailTemplate.getAccountDeletedEmailTemplate(emailService.getUsernameFromEmail(userEntity.getEmail()))
+                    );
         } else {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Wrong password.");
         }
@@ -105,16 +105,16 @@ public class UserController {
     @PostMapping("/update-password")
     @ResponseStatus(HttpStatus.OK)
     public boolean updatePassword(@RequestParam("currentPassword") String currentPassword,
-                               @RequestParam("newPassword") String newPassword) {
+                               @RequestParam("newPassword") String newPassword) throws MessagingException {
         User user = userService.getCurrentUser();
 
         if (passwordEncoder.matches(currentPassword, user.getPassword())) {
             userService.changeUserPassword(user, newPassword);
-            emailService.sendSimpleMessage(user.getEmail(), EmailConstant.ACCOUNT_PASSWORD_CHANGED,
-                    EmailTemplate.getChangePasswordEmailTemplate(
-                            emailService.getUsernameFromEmail(user.getEmail()),
-                            EmailConstant.ACCOUNT_PASSWORD_CHANGED
-                    ));
+            emailService.sendMessageUsingThymeleafTemplate(
+                    user.getEmail(),
+                    EmailConstant.ACCOUNT_PASSWORD_CHANGED_SUBJECT,
+                    EmailTemplate.getChangePasswordEmailTemplate(emailService.getUsernameFromEmail(user.getEmail()))
+                    );
             return true;
         } else {
             throw new ResponseStatusException(
