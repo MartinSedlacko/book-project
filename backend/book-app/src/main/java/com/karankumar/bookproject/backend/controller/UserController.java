@@ -19,6 +19,10 @@ import com.karankumar.bookproject.backend.dto.UserToRegisterDto;
 import com.karankumar.bookproject.backend.model.account.User;
 import com.karankumar.bookproject.backend.service.UserAlreadyRegisteredException;
 import com.karankumar.bookproject.backend.service.UserService;
+import com.karankumar.bookproject.constant.EmailConstant;
+import com.karankumar.bookproject.service.EmailServiceImpl;
+import com.karankumar.bookproject.template.EmailTemplate;
+import lombok.extern.java.Log;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,19 +34,22 @@ import java.util.List;
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
 @RequestMapping(Mappings.USER)
+@Log
 public class UserController {
     public static final String INCORRECT_PASSWORD_ERROR_MESSAGE =
             "The current password entered is incorrect";
 
     private final UserService userService;
+    private final EmailServiceImpl emailService;
     private final PasswordEncoder passwordEncoder;
 
     private static final String USER_NOT_FOUND_ERROR_MESSAGE = "Could not find the user with ID %d";
 
     @Autowired
-    public UserController(UserService userService, PasswordEncoder passwordEncoder) {
+    public UserController(UserService userService, PasswordEncoder passwordEncoder, EmailServiceImpl emailService) {
         this.userService = userService;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     @GetMapping("/users")
@@ -64,6 +71,12 @@ public class UserController {
     public void register(@RequestBody UserToRegisterDto user) {
         try {
             userService.register(user);
+            emailService.sendSimpleMessage(user.getUsername(),
+                    EmailConstant.ACCOUNT_CREATED,
+                    EmailTemplate.getAccountCreateEmailTemplate(
+                            emailService.getUsernameFromEmail(user.getUsername()),
+                            EmailConstant.EMAIL_KARANKUMAR
+                    ));
         } catch (UserAlreadyRegisteredException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email taken");
         }
@@ -74,11 +87,16 @@ public class UserController {
     public void deleteCurrentUser(@RequestBody UserToDeleteDto user) {
         String password = user.getPassword();
         if (passwordEncoder.matches(password, userService.getCurrentUser().getPassword())) {
-            Long userId = userService.getCurrentUser().getId();
-            if (userId == null) {
+            User userEntity = userService.getCurrentUser();
+            if (userEntity == null) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
             }
-            userService.deleteUserById(userId);
+            userService.deleteUserById(userEntity.getId());
+            emailService.sendSimpleMessage(userEntity.getEmail(), EmailConstant.ACCOUNT_DELETED,
+                    EmailTemplate.getAccountDeleteEmailTemplate(
+                            emailService.getUsernameFromEmail(userEntity.getEmail()),
+                            EmailConstant.EMAIL_KARANKUMAR
+                    ));
         } else {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Wrong password.");
         }
@@ -92,6 +110,11 @@ public class UserController {
 
         if (passwordEncoder.matches(currentPassword, user.getPassword())) {
             userService.changeUserPassword(user, newPassword);
+            emailService.sendSimpleMessage(user.getEmail(), EmailConstant.ACCOUNT_PASSWORD_CHANGED,
+                    EmailTemplate.getChangePasswordEmailTemplate(
+                            emailService.getUsernameFromEmail(user.getEmail()),
+                            EmailConstant.ACCOUNT_PASSWORD_CHANGED
+                    ));
             return true;
         } else {
             throw new ResponseStatusException(
