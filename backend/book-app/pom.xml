@@ -37,10 +37,9 @@
 
   <dependencies>
     <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>4.11</version>
-      <scope>test</scope>
+      <groupId>com.karankumar</groupId>
+      <artifactId>email-service</artifactId>
+      <version>0.2.0</version>
     </dependency>
   </dependencies>
 </project>

@@ -14,11 +14,14 @@
 
 package com.karankumar.bookproject.controller;
 
+import com.karankumar.bookproject.constant.EmailConstant;
 import com.karankumar.bookproject.dto.UserToDeleteDto;
 import com.karankumar.bookproject.dto.UserToRegisterDto;
 import com.karankumar.bookproject.model.account.User;
+import com.karankumar.bookproject.service.EmailServiceImpl;
 import com.karankumar.bookproject.service.UserAlreadyRegisteredException;
 import com.karankumar.bookproject.service.UserService;
+import com.karankumar.bookproject.template.EmailTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +38,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import javax.mail.MessagingException;
 import javax.validation.ConstraintViolation;
 import javax.validation.ConstraintViolationException;
 import java.util.ArrayList;
@@ -50,13 +54,15 @@ public class UserController {
 
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
+    private final EmailServiceImpl emailService;
 
     private static final String USER_NOT_FOUND_ERROR_MESSAGE = "Could not find the user with ID %d";
 
     @Autowired
-    public UserController(UserService userService, PasswordEncoder passwordEncoder) {
+    public UserController(UserService userService, PasswordEncoder passwordEncoder, EmailServiceImpl emailService) {
         this.userService = userService;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     @GetMapping("/users")
@@ -78,8 +84,13 @@ public class UserController {
     public ResponseEntity<Object> register(@RequestBody UserToRegisterDto user) {
         try {
             userService.register(user);
+            emailService.sendMessageUsingThymeleafTemplate(
+                    user.getUsername(),
+                    EmailConstant.ACCOUNT_CREATED_SUBJECT,
+                    EmailTemplate.getAccountCreatedEmailTemplate(emailService.getUsernameFromEmail(user.getUsername()))
+            );
             return ResponseEntity.status(HttpStatus.OK).body("user created");
-        } catch (UserAlreadyRegisteredException e) {
+        } catch (UserAlreadyRegisteredException | MessagingException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("email taken");
         } catch (ConstraintViolationException ex) {
             Set<ConstraintViolation<?>> violations = ex.getConstraintViolations();
@@ -95,14 +106,19 @@ public class UserController {
 
     @DeleteMapping()
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteCurrentUser(@RequestBody UserToDeleteDto user) {
+    public void deleteCurrentUser(@RequestBody UserToDeleteDto user) throws MessagingException {
         String password = user.getPassword();
         if (passwordEncoder.matches(password, userService.getCurrentUser().getPassword())) {
-            Long userId = userService.getCurrentUser().getId();
-            if (userId == null) {
+            User userEntity = userService.getCurrentUser();
+            if (userEntity == null || userEntity.getId() == null) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
             }
-            userService.deleteUserById(userId);
+            userService.deleteUserById(userEntity.getId());
+            emailService.sendMessageUsingThymeleafTemplate(
+                    userEntity.getEmail(),
+                    EmailConstant.ACCOUNT_DELETED_SUBJECT,
+                    EmailTemplate.getAccountDeletedEmailTemplate(emailService.getUsernameFromEmail(userEntity.getEmail()))
+            );
         } else {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Wrong password.");
         }
@@ -111,11 +127,16 @@ public class UserController {
     @PostMapping("/update-password")
     @ResponseStatus(HttpStatus.OK)
     public boolean updatePassword(@RequestParam("currentPassword") String currentPassword,
-                               @RequestParam("newPassword") String newPassword) {
+                               @RequestParam("newPassword") String newPassword) throws MessagingException {
         User user = userService.getCurrentUser();
 
         if (passwordEncoder.matches(currentPassword, user.getPassword())) {
             userService.changeUserPassword(user, newPassword);
+            emailService.sendMessageUsingThymeleafTemplate(
+                    user.getEmail(),
+                    EmailConstant.ACCOUNT_PASSWORD_CHANGED_SUBJECT,
+                    EmailTemplate.getChangePasswordEmailTemplate(emailService.getUsernameFromEmail(user.getEmail()))
+            );
             return true;
         } else {
             throw new ResponseStatusException(

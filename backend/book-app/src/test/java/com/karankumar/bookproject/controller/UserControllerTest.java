@@ -15,6 +15,7 @@
 package com.karankumar.bookproject.controller;
 
 import com.karankumar.bookproject.model.account.User;
+import com.karankumar.bookproject.service.EmailServiceImpl;
 import com.karankumar.bookproject.service.UserService;
 import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.Disabled;
@@ -47,6 +48,7 @@ class UserControllerTest {
   
     private final UserController userController;
     private final UserService mockedUserService;
+    private final EmailServiceImpl mockedEmailService;
 
     private final User validUser = User.builder()
                                        .email("valid@testmail.com")
@@ -60,8 +62,9 @@ class UserControllerTest {
 
     UserControllerTest() {
         mockedUserService = mock(UserService.class);
+        mockedEmailService = mock(EmailServiceImpl.class);
         PasswordEncoder mockedPasswordEncoder = mock(PasswordEncoder.class);
-        userController = new UserController(mockedUserService, mockedPasswordEncoder);
+        userController = new UserController(mockedUserService, mockedPasswordEncoder, mockedEmailService);
     }
 
     @Test
@@ -111,7 +114,7 @@ class UserControllerTest {
 
         Mockito.when(passwordEncoder.matches(Mockito.anyString(), Mockito.anyString()))
                .thenReturn(false);
-        UserController userController = new UserController(userService, passwordEncoder);
+        UserController userController = new UserController(userService, passwordEncoder, mockedEmailService);
 
         String expectedMessage = String.format(
                 "%s \"%s\"",

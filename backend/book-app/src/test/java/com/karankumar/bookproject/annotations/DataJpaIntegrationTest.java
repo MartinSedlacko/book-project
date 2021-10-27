@@ -17,9 +17,11 @@
 
 package com.karankumar.bookproject.annotations;
 
+import com.karankumar.bookproject.BookProjectApplication;
 import org.junit.jupiter.api.Tag;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Inherited;
@@ -33,5 +35,6 @@ import java.lang.annotation.Target;
 @Tag("integration-test")
 @DataJpaTest
 @ActiveProfiles("test")
+@ContextConfiguration(classes = BookProjectApplication.class)
 public @interface DataJpaIntegrationTest {
 }
